@@ -3,15 +3,14 @@
 
 #include "weaveDataStorage.h"
 #include "commandSocket.h"
-#include "settings.h"
+#include "settings/settings.h"
 
-#include "modelFile/modelFile.h" // PrintObject
+#include "MeshGroup.h"
 #include "slicer.h"
 
+#include "utils/NoCopy.h"
 #include "utils/polygon.h"
 #include "utils/polygonUtils.h"
-
-#include "debug.h"
 
 namespace cura
 {
@@ -19,7 +18,7 @@ namespace cura
 /*!
  * The main weaver / WirePrint / wireframe printing class, which computes the basic paths to be followed.
  */
-class Weaver : public SettingsBase
+class Weaver : public SettingsMessenger, NoCopy
 {
     friend class Wireframe2gcode;
 private:
@@ -29,7 +28,7 @@ private:
     
     int initial_layer_thickness;
     int connectionHeight; 
-    int extrusionWidth;
+    int line_width;
     
     int roof_inset; 
     
@@ -40,14 +39,13 @@ private:
    
     
 public:
-    
-    Weaver(SettingsBase* settings_base) : SettingsBase(settings_base) 
+    Weaver(SettingsBase* settings_base) : SettingsMessenger(settings_base) 
     {
         
         initial_layer_thickness = getSettingInMicrons("layer_height_0");
         connectionHeight = getSettingInMicrons("wireframe_height"); 
         
-        extrusionWidth = getSettingInMicrons("wall_line_width_x");
+        line_width = getSettingInMicrons("wall_line_width_x");
         
         roof_inset = getSettingInMicrons("wireframe_roof_inset"); 
         nozzle_outer_diameter = getSettingInMicrons("machine_nozzle_tip_outer_diameter");      // ___       ___   .
@@ -60,10 +58,9 @@ public:
      * This is the main function for Neith / Weaving / WirePrinting / Webbed printing.
      * Creates a wireframe for the model consisting of horizontal 'flat' parts and connections between consecutive flat parts consisting of UP moves and diagonally DOWN moves.
      * 
-     * \param object The object for which to create a wireframe print
-     * \param commandSocket the commandSocket
+     * \param objects The objects for which to create a wireframe print
      */
-    void weave(PrintObject* object, CommandSocket* commandSocket);
+    void weave(MeshGroup* objects);
     
 
 private:
@@ -77,19 +74,16 @@ private:
  * \param z0 The height of the \p supporting
  * \param supported The polygons to be supported by the connection from \p supporting to \p supported
  * \param z1 the height of \p supported
- * \param include_last Whether the last full link should be included in the chainified \p parts1 if the last link would be shorter than the normal link size.
  */
-    void connect(Polygons& parts0, int z0, Polygons& parts1, int z1, WeaveConnection& result, bool include_last);
+    void connect(Polygons& parts0, int z0, Polygons& parts1, int z1, WeaveConnection& result);
 
 /*!
  * Convert polygons, such that they consist of segments/links of uniform size, namely \p nozzle_top_diameter.
  * 
  * \param parts1 The polygons to be chainified
  * \param start_close_to The point from which to start the first link
- * \param include_last governs whether the last segment is smaller or grater than the \p nozzle_top_diameter.
- * If true, the last segment may be smaller.
  */
-    void chainify_polygons(Polygons& parts1, Point start_close_to, Polygons& result, bool include_last);
+    void chainify_polygons(Polygons& parts1, Point start_close_to, Polygons& result);
     
 /*!
  * The main weaving function.
@@ -109,7 +103,7 @@ private:
 /*!
  * Creates the roofs and floors which are laid down horizontally.
  */
-    void createHorizontalFill(Polygons& lower_top_parts, WeaveLayer& layer, Polygons& layer_above, int z1);
+    void createHorizontalFill(WeaveLayer& layer, Polygons& layer_above);
     
 /*!
  * Fill roofs starting from the outlines of \p supporting.
